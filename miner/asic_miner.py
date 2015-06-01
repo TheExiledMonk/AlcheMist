@@ -25,7 +25,7 @@ import socket
 import requests
 from requests.auth import HTTPBasicAuth
 
-VERSION = '1.1.6'
+VERSION = '1.2.0Beta'
 
 #------- hw.py --------
 #from serial import Serial
@@ -303,13 +303,12 @@ class CoinRPC(object):
         payload = { 'version':'1.1', 'method':'getwork', 'params':[], 'id':'1' }
         global DEBUG        	
         payload['params'] = ([] if (data is None) else data)
-        if (DEBUG >= 5000):
+        if (DEBUG >= 1000):
 			#(stratum_host, stratum_port) = stratum_proxy.get_params()
 			#print 'Restarting stratum proxy... error getwork', DEBUG
 			#stratum_proxy.stop()
 			#time.sleep(3)
 			DEBUG = 0
-			reboot()
 			#stratum_proxy.start(stratum_host, stratum_port, config.port, config.username, config.password)
 		
 		
@@ -551,7 +550,7 @@ class StratumProxy(object):
         if not self.isRunning:
             self.proxy = subprocess.Popen(['/usr/bin/python', 'stratum-mining-proxy/mining_proxy.py', \
                                                 '-o', stratum_host, '-p', stratum_port, '-gp', getwork_port , \
-                                                '-cu', username, '-cp', password, '-pa', 'scrypt', \
+                                                '-cu', username, '-cp', password, '-pa', 'scrypt', '-rt', '-cd', \
                                                 '-q'], stdout=subprocess.PIPE, shell=False)
             self.isRunning = True
 

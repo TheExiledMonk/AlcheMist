@@ -3,7 +3,7 @@
   <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 	<meta http-equiv="X-UA-Compatible" content="chrome=1,IE=edge" />
-	<title>alcheminer_webs</title>
+	<title>AlcheMist</title>
 	<style>
 		html {
 			height:100%;
@@ -32,8 +32,8 @@
 	
 	<!-- copy these lines to your document: -->
 
-	<div id="alcheminerwebs_hype_container" style="position:relative;overflow:hidden;width:800px;height:640px;">
-		<script type="text/javascript" charset="utf-8" src="alcheminer_webs.hyperesources/alcheminerwebs_hype_generated_script.js?89823"></script>
+	<div id="asicwebs_hype_container" style="position:relative;overflow:hidden;width:800px;height:640px;">
+		<script type="text/javascript" charset="utf-8" src="asic_webs.hyperesources/asicwebs_hype_generated_script.js?39581"></script>
 	</div>
 
 
@@ -48,7 +48,7 @@
 
 <script type="text/javascript">
 
-	web_version = "1.1.0";
+	web_version = "1.1.1";
 	ws = ws_init(ws_on_open, ws_on_close, ws_on_error, ws_on_msg);
 	
 	if (ws == null)
@@ -102,7 +102,7 @@ function ws_on_msg(evt)
 			break;
 		case "s0":
 			if (rx.result)
-				HYPE.documents['alcheminer_webs'].showSceneNamed('s1');
+				HYPE.documents['asic_webs'].showSceneNamed('s1');
 			else
 				alert("Access denied!");
 			break;
@@ -223,6 +223,14 @@ function s1_ctrl(onoff)
 	var rpc_tx = {"method":"control", "params":[(onoff == 1) ? 'go' : 'stop'], "id":"s1"};
 
 	ws_send(JSON.stringify(rpc_tx));
+}
+
+function s1_reboot()
+{
+	var rpc_tx = {"method":"control", "params":['reboot'], "id":"s1"};
+
+	ws_send(JSON.stringify(rpc_tx));
+	alert("Mining machine is rebooting... Go back about 1 minute later!")
 }
 
 function s2_init()

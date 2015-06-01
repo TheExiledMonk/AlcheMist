@@ -7,6 +7,28 @@ from twisted.web import client
 import stratum.logger
 log = stratum.logger.get_logger('proxy')
 
+minimal_target = None
+hashing_algo = None
+ltc_scrypt = None
+
+def set_hashing_algo(algo):
+	global hashing_algo, minimal_target, ltc_scrypt
+	if algo == 'doublesha':
+		hashing_algo = 'doublesha'
+		minimal_target = 0x00000000ffff0000000000000000000000000000000000000000000000000000
+	else:
+		if algo == 'scrypt':
+			hashing_algo = 'scrypt'
+			minimal_target = 0x0000ffff00000000000000000000000000000000000000000000000000000000
+			
+			try:
+				import ltc_scrypt
+			except:
+				raise Exception("Unable to load ltc_scrypt module.")
+		else:
+			raise Exception("Unknown algo, only doublesha and scrypt supported.")
+	
+
 def show_message(msg):
     '''Repeatedly displays the message received from
     the server.'''
@@ -38,6 +60,21 @@ def reverse_hash(h):
 def doublesha(b):
     return hashlib.sha256(hashlib.sha256(b).digest()).digest()
 
+def PoW(b):
+	global hashing_algo, ltc_scrypt
+	if hashing_algo == 'doublesha':
+		return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+	else:
+		return ltc_scrypt.getPoWHash(b)
+
+def getMT():
+	global minimal_target
+	return minimal_target
+
+def getAlgo():
+	global hashing_algo
+	return hashing_algo
+
 @defer.inlineCallbacks
 def detect_stratum(host, port):
     '''Perform getwork request to given
@@ -46,11 +83,16 @@ def detect_stratum(host, port):
     Not the most elegant code, but it works,
     because Stratum server should close the connection
     when client uses unknown payload.'''
-    
+        
+    def get_raw_page(url, *args, **kwargs):
+        scheme, host, port, path = client._parse(url)
+        factory = client.HTTPClientFactory(url, *args, **kwargs)
+        reactor.connectTCP(host, port, factory)
+        return factory
+
     def _on_callback(_, d):d.callback(True)
     def _on_errback(_, d): d.callback(True)
-    f = client.HTTPClientFactory('http://%s:%d' % (host, port))
-    reactor.connectTCP(host, port, f)
+    f = get_raw_page('http://%s:%d' % (host, port))
     
     d = defer.Deferred()
     f.deferred.addCallback(_on_callback, d)

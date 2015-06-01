@@ -4,13 +4,13 @@ from stratum.event_handler import GenericEventHandler
 from jobs import Job
 import utils
 import version as _version
-
 import stratum_listener
 from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketClientFactory
 import json
 
 import stratum.logger
 log = stratum.logger.get_logger('proxy')
+
 
 ws_svr = []
 
@@ -44,7 +44,7 @@ class ClientMiningService(GenericEventHandler):
                 cls.timeout.cancel()
             cls.timeout = None
             
-        cls.timeout = reactor.callLater(2*60, cls.on_timeout)
+        cls.timeout = reactor.callLater(5*60, cls.on_timeout)
 
     @classmethod
     def on_timeout(cls):
@@ -53,13 +53,14 @@ class ClientMiningService(GenericEventHandler):
             It will also drop all Stratum connections to sub-miners
             to indicate connection issues.
         '''
+        log.warn("TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT")
         log.error("Connection to upstream pool timed out")
         cls.reset_timeout()
-        cls.job_registry.f.reconnect()
+        #cls.job_registry.f.reconnect()
                 
     def handle_event(self, method, params, connection_ref):
         '''Handle RPC calls and notifications from the pool'''
-
+        log.warn("@@ %s @@" % method)
         # Yay, we received something from the pool,
         # let's restart the timeout.
         self.reset_timeout()
@@ -77,7 +78,6 @@ class ClientMiningService(GenericEventHandler):
                     print 'ws_svr'
                     print c
                     c.sendMessage(json.dumps(rpc_tx))
-            
             '''
             log.debug("Received new job #%s" % job_id)
             log.debug("prevhash = %s" % prevhash)
