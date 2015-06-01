@@ -43,6 +43,7 @@ def parse_args():
     parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', help='Make output more quiet')
     parser.add_argument('-i', '--pid-file', dest='pid_file', type=str, help='Store process pid to the file')
     parser.add_argument('-pa', '--pow-algo', dest='pow_algo', default='doublesha', type=str, help='Proof of work function')
+    parser.add_argument('-cd', '--chk-diff', dest='chk_diff', action='store_true', help='Check difficulty before submitting')
     return parser.parse_args()
 
 from stratum import settings
@@ -93,16 +94,16 @@ def on_connect(f, workers, job_registry):
     
     # Every worker have to re-autorize
     workers.clear_authorizations() 
-    
-    if args.custom_user:
-        log.info("Authorizing custom user %s, password %s" % (args.custom_user, args.custom_password))
-        workers.authorize(args.custom_user, args.custom_password)
-        
+            
     # Subscribe for receiving jobs
     log.info("Subscribing for mining jobs")
     (_, extranonce1, extranonce2_size) = (yield f.rpc('mining.subscribe', []))
     job_registry.set_extranonce(extranonce1, extranonce2_size)
     stratum_listener.StratumProxyService._set_extranonce(extranonce1, extranonce2_size)
+
+    if args.custom_user:
+        log.info("Authorizing custom user %s, password %s" % (args.custom_user, args.custom_password))
+        workers.authorize(args.custom_user, args.custom_password)
     
     defer.returnValue(f)
      
@@ -198,7 +199,7 @@ def main(args):
     log.info("Setting PoW algo: %s" % args.pow_algo)
     
     job_registry = jobs.JobRegistry(f, cmd=args.blocknotify_cmd,
-                   no_midstate=args.no_midstate, real_target=args.real_target)
+                   no_midstate=args.no_midstate, real_target=args.real_target, chk_diff=args.chk_diff)
     client_service.ClientMiningService.job_registry = job_registry
     client_service.ClientMiningService.reset_timeout()
     
@@ -243,8 +244,6 @@ def main(args):
     clean_job_factory = WebSocketClientFactory('ws://localhost:9000', debug = False)
     clean_job_factory.protocol = client_service.CleanJobProtocol
     reactor.connectTCP('127.0.0.1', 9000, clean_job_factory)
-    #cj = CleanJobProtocol()
-    #client_service.ClientMiningService.clean_job_protocol = cj
 
 if __name__ == '__main__':
     main(args)

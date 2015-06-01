@@ -15,7 +15,6 @@ import Queue
 from serial import Serial
 from threading import Thread, Event
 from config import ArgsConfig, AsicConfig
-#from hw import AsicBoard
 from autobahn.twisted.websocket import WebSocketServerFactory, WebSocketServerProtocol
 from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
@@ -23,14 +22,16 @@ from twisted.internet.serialport import SerialPort
 from twisted.protocols.basic import LineReceiver
 import binascii
 import socket
+import requests
+from requests.auth import HTTPBasicAuth
 
-VERSION = '1.1.0'
+VERSION = '1.1.4'
 
 #------- hw.py --------
-from serial import Serial
-import subprocess
-from time import sleep
-import binascii
+#from serial import Serial
+#import subprocess
+#from time import sleep
+#import binascii
 
 MAX_BOARDS = 8
 MAX_CHIPS = 32
@@ -202,7 +203,7 @@ class AsicBoard(object):
         for chp in sorted(self.asic):
             # setup nonce incremental = 0x0001
             payload = ('%s' % chp) + 'ff0001000000a0220000' + g_tail
-            sleep(0.01)
+            time.sleep(0.01)
             self.write_by_hex(payload)
 
             for clst in sorted(self.asic[chp]):
@@ -251,13 +252,11 @@ class AsicBoard(object):
 
 #------- hw.py --------
 
-
-
-
-ERR_SLEEP = 3
-
+SUBMIT_Q_THROTTLE = 30
 WEB_REFRESH_TIME = 5
 LCM_REFRESH_TIME = 5
+REFRESH_KHRATE_TIME = 5
+STRATUM_CHK_INTERVAL = 30
 
 rst = {'00':None, '01':None, '02':None, '03':None, '04':None, '05':None, '06':None, '07':None}
 com = {'00':None, '01':None, '02':None, '03':None, '04':None, '05':None, '06':None, '07':None}
@@ -265,6 +264,9 @@ brd = {'00':None, '01':None, '02':None, '03':None, '04':None, '05':None, '06':No
 pool_ctrl = {'00':None, '01':None, '02':None, '03':None, '04':None, '05':None, '06':None, '07':None}
 alche_protocol = {'00':None, '01':None, '02':None, '03':None, '04':None, '05':None, '06':None, '07':None}
 ans_queue = {'00':None, '01':None, '02':None, '03':None, '04':None, '05':None, '06':None, '07':None}
+
+active_brd_num = 0
+active_brd = []
 
 miner_ctrl = Event()
 for p in pool_ctrl:
@@ -281,104 +283,82 @@ def lcm_disp(msg):
     lcm.messages = msgs
     lcm.refresh()
 
-class CoinRPC:
-    OBJID = 1
-
+class CoinRPC(object):
     def __init__(self, host, port, username, password):
-        #print '[%s %d %s %s]' % (host, port, username, password)
         self.host = host
         self.port = port
         self.username = username
         self.password = password
-        authpair = "%s:%s" % (username, password)
-        self.authhdr = "Basic %s" % (base64.b64encode(authpair))
-        self.conn = httplib.HTTPConnection(host, port, False, 30)
+        self.url = 'http://' + self.host + ':' + self.port
 
     def reconnect(self, host, port, username, password):
         self.host = host
         self.port = port
         self.username = username
-        self.password = password
-        authpair = "%s:%s" % (username, password)
-        self.authhdr = "Basic %s" % (base64.b64encode(authpair))
-        self.conn = httplib.HTTPConnection(host, port, False, 30)
-
-    def rpc(self, method, params=None):
-        self.OBJID += 1
-        obj = { 'version' : '1.1',
-            'method' : method,
-            'id' : self.OBJID }
-        if params is None:
-            obj['params'] = []
-        else:
-            obj['params'] = params
-
-        rpc_resp = None
-        
-        self.conn.request('POST', '/', json.dumps(obj), { 'Authorization' : self.authhdr, 'Content-type' : 'application/json' })
-        #print '>>>>>>> HTTP REQ: %s' % json.dumps(obj)
-        rpc_resp = self.conn.getresponse()
-
-        if rpc_resp is None:
-            print "JSON-RPC: no response"
-            return None
-
-        body = rpc_resp.read()
-        #print '<<<<<<<< HTTP resp: %s' % body
-        resp_obj = json.loads(body)
-        if resp_obj is None:
-            print "JSON-RPC: cannot JSON-decode body"
-            return None
-        if 'error' in resp_obj and resp_obj['error'] != None:
-            return resp_obj['error']
-        if 'result' not in resp_obj:
-            print "JSON-RPC: no result in object"
-            return None
-
-        return resp_obj['result']
-
-    def getblockcount(self):
-        return self.rpc('getblockcount')
+        self.password = password        
+        self.url = 'http://' + self.host + ':' + self.port
 
     def getwork(self, data=None):
-        return self.rpc('getwork', data)
-        #print data
-        #return self.pool.getwork(data)
+        payload = { 'version':'1.1', 'method':'getwork', 'params':[], 'id':'1' }
+
+        payload['params'] = ([] if (data is None) else data)
+
+        try:
+            r = requests.post(self.url, \
+                                auth=HTTPBasicAuth(self.username, self.password), \
+                                data=json.dumps(payload), \
+                                timeout=30)
+            resp = r.json()
+            if (resp['error'] is not None):
+                print '-- RPC error!'
+                print r.text
+                return None
+            else:
+                return resp['result']
+
+        except requests.ConnectionError:
+            print '-- HTTP connection error!'
+            return None
+
+        except requests.Timeout:
+            print '-- HTTP connection timeout!'
+            return None
+
+        except Exception as e:
+            print '-- RPC general error!'
+            print e
+            return None
 
 class Submitter(Thread):
     def __init__(self):
         Thread.__init__(self)
         self.daemon = True
-        self.coin_rpc = CoinRPC(config.host, int(config.port), config.username, config.password)
+        self.coin_rpc = CoinRPC(config.host, config.port, config.username, config.password)
 
     def run(self):
         while True:
             if submitter_ctrl.isSet():
                 submitter_ctrl.clear()
-                #for i in range(submit_queue.qsize()):
-                #    (bid, data, target, nonce_bin) = submit_queue.get()
-                #    submit_queue.task_done()
-                self.coin_rpc.reconnect(config.host, int(config.port), config.username, config.password)
 
             (bid, data, target, nonce_bin) = submit_queue.get()
             print '  -- Q (%d) --' % submit_queue.qsize()
             nonce = nonce_bin[::-1].encode('hex')
             solution = data[:152] + nonce + data[160:256]
             param_arr = [ solution ]
-            #rpc = CoinRPC(config.host, int(config.port), config.username, config.password)
 
-            for i in range(3):
-                submit_result = None
-                try:
-                    submit_result = self.coin_rpc.getwork(param_arr)
+            submit_result = None
+            for i in range(5):
+                submit_result = self.coin_rpc.getwork(param_arr)
+                if (submit_result is not None):
                     hash_queue.put((bid, submit_result, target, nonce_bin))
                     break
-                except Exception as e:
-                    print e
-                if (submit_result is None):
-                    self.coin_rpc.reconnect(config.host, int(config.port), config.username, config.password)
+                else:
+                    self.coin_rpc.reconnect(config.host, config.port, config.username, config.password)
                     print '** submit reconnect... **'
+                    time.sleep(0.1)
+
             submit_queue.task_done()
+            time.sleep(0.05)
 
 class AlcheProtocol(LineReceiver):
     def __init__(self, bid):
@@ -427,7 +407,7 @@ class Miner(Thread):
         self.targetstr = ''
         self.diff = 1
         self.alche_protocol = alcheprotocol
-        self.coin_rpc = CoinRPC(config.host, int(config.port), config.username, config.password)
+        self.coin_rpc = CoinRPC(config.host, config.port, config.username, config.password)
 
     def do_work(self, datastr, targetstr):
         if (targetstr != self.targetstr):
@@ -457,45 +437,23 @@ class Miner(Thread):
 
         return com_resp[:4]
 
-
-    '''
-    def submit_work(self, rpc, original_data, nonce_bin):
-        nonce = nonce_bin[::-1].encode('hex')
-        solution = original_data[:152] + nonce + original_data[160:256]
-        param_arr = [ solution ]
-        sbt_time = time.time()
-        submit_result = rpc.getwork(param_arr)
-        print '-- submit [%0.4f] sec.' % (time.time()-sbt_time)
-        #result = rpc.getwork(solution)
-        #print 'solution: %s' % solution
-        #print time.asctime(), "--> Upstream RPC result:", submit_result
-        return submit_result
-        '''
-
     def iterate(self):
         work = None
-        try:
+        for i in range(5):
             work = self.coin_rpc.getwork()
-        except Exception as e:
-            print 'Getwork RPC error!'
-            print e
-
+            if (work is not None):
+                break
         if work is None:
             print 'ERR: Work is None'
-            time.sleep(ERR_SLEEP)
-            return False
-        if 'data' not in work or 'target' not in work:
-            print 'ERR: data or target not in Work'
-            time.sleep(ERR_SLEEP)
             return False
 
         nonce_bin = self.do_work(work['data'], work['target'])
 
         if len(nonce_bin) == 4:
-            if (submit_queue.qsize() < 50):
-                submit_queue.put((self.bid, work['data'], work['target'], nonce_bin))
-            else:
-                time.sleep(submit_queue.qsize() / 50)
+            submit_queue.put((self.bid, work['data'], work['target'], nonce_bin))
+            if (submit_queue.qsize() > SUBMIT_Q_THROTTLE):
+                print '...Nap for %0.2f sec...' % (active_brd_num * submit_queue.qsize() / SUBMIT_Q_THROTTLE)
+                time.sleep(active_brd_num * submit_queue.qsize() / SUBMIT_Q_THROTTLE)
 
         return True
 
@@ -504,15 +462,12 @@ class Miner(Thread):
         iterate_result = False
 
         while True:
-
             miner_ctrl.wait()
             if pool_ctrl[self.bid].isSet():
                 iterate_result = False
                 pool_ctrl[self.bid].clear()
-
             if (iterate_result == False):
-                self.coin_rpc.reconnect(config.host, int(config.port), config.username, config.password)
-
+                self.coin_rpc.reconnect(config.host, config.port, config.username, config.password)
             iterate_result = self.iterate()
 
 class Stat(Thread):
@@ -529,6 +484,20 @@ class Stat(Thread):
     def reset_stt_time(self):
         self.miner_stt_time = time.time()
         self.khrate['since'] = self.miner_stt_time
+
+    def reset_stat(self):
+        for b in ['00', '01', '02', '03', '04', '05', '06', '07']:
+            self.acc_kh[b] = 0.00
+            self.khrate[b] = 0.00
+        self.khrate['accepted'] = 0
+        self.khrate['rejected'] = 0
+        self.total_accepted = 0
+        self.total_rejected = 0
+        self.reset_stt_time()
+
+    def refresh_khrate(self):
+        for i in ['00', '01', '02', '03', '04', '05', '06', '07']:
+            self.khrate[i] = self.acc_kh[i] / (time.time() - self.miner_stt_time)
 
     def run(self):
         while True:
@@ -549,89 +518,34 @@ class Stat(Thread):
 
             hash_queue.task_done()
 
-'''
-class Stat(Thread):
-    def __init__(self):
-        Thread.__init__(self)
-        self.daemon = True
-        self.acc_kh = {'00':0.00, '01':0.00, '02':0.00, '03':0.00, '04':0.00, '05':0.00, '06':0.00, '07':0.00}
-        self.khrate = {'00':0.00, '01':0.00, '02':0.00, '03':0.00, '04':0.00, '05':0.00, '06':0.00, '07':0.00, 'accepted':0, 'rejected':0, 'since':0}
-        self.total_accepted = 0
-        self.total_rejected = 0
-        self.miner_stt_time = time.time()
-        self.lcm_stt_time = time.time()
-        self.web_stt_time = time.time()
-        self.q_empty = True
-        self.khrate['since'] = self.miner_stt_time
 
-    def reset_stt_time(self):
-        self.miner_stt_time = time.time()
-        self.lcm_stt_time = time.time()
-        self.web_stt_time = time.time()
-        self.khrate['since'] = self.miner_stt_time
-
-    def run(self):
-        while True:
-            if stat_reset.isSet():
-                stat_reset.clear()
-                for i in self.khrate:
-                    self.khrate[i] = 0
-                    self.acc_kh[i] = 0
-                self.reset_stt_time()
-                self.total_accepted = 0
-                self.total_rejected = 0
-
-            try:
-                (brd_id, sr, tgt, nnc_bin, dt) = hash_queue.get()
-                self.q_empty = False
-            except Queue.Empty:
-                self.q_empty = True
-                pass
-
-            if not self.q_empty:
-                diff = 0x0000ffff00000000 / long(tgt[48:64].decode('hex')[::-1].encode('hex'), 16)
-                acc_kh = self.acc_kh[brd_id]
-                acc_kh += diff * 65.536 * 1
-                self.acc_kh[brd_id] = acc_kh
-                self.khrate[brd_id] = acc_kh / (time.time() - self.miner_stt_time)
-
-                if sr:
-                    self.total_accepted += 1
-                    self.khrate['accepted'] = self.total_accepted
-                else:
-                    self.total_rejected += 1
-                    self.khrate['rejected'] = self.total_rejected
-
-                hash_queue.task_done()
-
-            if (time.time() - self.web_stt_time) > WEB_REFRESH_TIME:
-                self.web_stt_time = time.time()
-                rsp = {'result':self.khrate, 'error':None, 'id':'s1'}
-                for i in ws_client:
-                    reactor.callFromThread(WebSocketServerProtocol.sendMessage, i, json.dumps(rsp))
-
-            if (time.time() - self.lcm_stt_time) > LCM_REFRESH_TIME:
-                self.lcm_stt_time = time.time()
-                total_khashrate = 0
-                for i in ['00', '01', '02', '03', '04', '05', '06', '07']:
-                    total_khashrate += self.khrate[i]
-                #print '-- Total hash rate: %0.2f' % total_khashrate
-                #print '-- Total submit: accepted (%d), rejected (%d)' % (self.total_accepted, self.total_rejected)
-                lcm_disp('HR: %0.2f Mh/s' % (total_khashrate/1000))
-'''
 
 
 class StratumProxy(object):
     def __init__(self):
         self.proxy = None
         self.isRunning = False
+        self.stratum_host = None
+        self.stratum_port = None
+
+    def get_params(self):
+        return (self.stratum_host, self.stratum_port)
 
     def start(self, stratum_host, stratum_port, getwork_port, username, password):
+        self.stratum_host = stratum_host
+        self.stratum_port = stratum_port
+
         if not self.isRunning:
-            self.proxy = subprocess.Popen(['/usr/bin/python', 'stratum-mining-proxy/mining_proxy.py', \
-                                            '-o', stratum_host, '-p', stratum_port, '-gp', getwork_port , \
-                                            '-cu', username, '-cp', password, '-pa', 'scrypt', \
-                                            '-nm', '-q'], stdout=subprocess.PIPE, shell=False)
+            if ('ghash.io' in stratum_host):
+                self.proxy = subprocess.Popen(['/usr/bin/python', 'stratum-mining-proxy/mining_proxy.py', \
+                                                '-o', stratum_host, '-p', stratum_port, '-gp', getwork_port , \
+                                                '-cu', username, '-cp', password, '-pa', 'scrypt', \
+                                                '-nm', '-q'], stdout=subprocess.PIPE, shell=False)
+            else:
+                self.proxy = subprocess.Popen(['/usr/bin/python', 'stratum-mining-proxy/mining_proxy.py', \
+                                                '-o', stratum_host, '-p', stratum_port, '-gp', getwork_port , \
+                                                '-cu', username, '-cp', password, '-pa', 'scrypt', \
+                                                '-nm', '-cd', '-q'], stdout=subprocess.PIPE, shell=False)
             self.isRunning = True
 
     def stop(self):
@@ -660,15 +574,16 @@ class WebUIProtocol(WebSocketServerProtocol):
         print 'Connecting...'
 
     def onOpen(self):
-        #ws_client.append(self)
-        print 'Opening...'
+        if (self.transport.getPeer().host != '127.0.0.1'):
+            ws_client.append(self)
+        print 'Opening...[%s]' % self.transport.getPeer().host
 
     def onClose(self, wasClean, code, reason):
         try:
             ws_client.remove(self)
         except ValueError:
             pass
-        print 'Close...'
+        print 'Close...[%s]' % self.transport.getPeer().host
 
     def onMessage(self, data, isBinary):
         #if (data == 'hashrate'):
@@ -742,6 +657,9 @@ class WebUIProtocol(WebSocketServerProtocol):
                 stratum_proxy.stop()
             except OSError:
                 pass
+            # Reset stat
+            stat.reset_stat()
+
         return
 
     def web_hashrate(self, req):
@@ -762,6 +680,7 @@ class WebUIProtocol(WebSocketServerProtocol):
             rsp['id'] = req['id']
             self.sendMessage(json.dumps(rsp))
         else:
+            stratum_mtr.stop()
             (protocol, host, port, username, password) = (i for i in req['params'])
             (config.protocol, config.host, config.port, config.username, config.password) = (protocol, host, port, username, password)
             cr = config.save_config()
@@ -774,6 +693,9 @@ class WebUIProtocol(WebSocketServerProtocol):
                 for p in pool_ctrl:
                     pool_ctrl[p].set()
                 submitter_ctrl.set()
+
+                # Reset stat
+                stat.reset_stat()
 
                 # stop all miner thread
                 miner_ctrl.clear()
@@ -801,6 +723,7 @@ class WebUIProtocol(WebSocketServerProtocol):
                     time.sleep(3)
                 # startup minter threads...
                 miner_ctrl.set()
+            stratum_mtr.start(STRATUM_CHK_INTERVAL)
 
     def web_host_config(self, req):
         rsp = {'result':False, 'error':None, 'id':None}
@@ -862,7 +785,6 @@ class WebUIProtocol(WebSocketServerProtocol):
             rsp['id'] = req['id']
             self.sendMessage(json.dumps(rsp))
 
-            #subprocess.call(['sh', 'network_restart'], shell=False)
             time.sleep(0.5)
             subprocess.call(['/sbin/ifdown', 'eth1'], shell=False)
             time.sleep(0.5)
@@ -914,12 +836,24 @@ class WebUIProtocol(WebSocketServerProtocol):
 
     def clean_job(self, req):
         print 'clean job!'
+        
         # put 9-byte 'FF' to inform all board to clean jobs immediately
         for bid in ans_queue:
             ans_queue[bid].put('ffffffffffffffffff')
+        # clear submit_queue
+        while not submit_queue.empty():
+            try:
+                submit_queue.get(False)
+            except Queue.Empty:
+                continue
+            submit_queue.task_done()
+
         return
 
 lcm_disp('Hello, miner...')
+
+def refresh_khrate():
+    stat.refresh_khrate()
 
 def web_display():
     rsp = {'result':stat.khrate, 'error':None, 'id':'s1'}
@@ -935,6 +869,7 @@ def lcm_display():
     lcm_disp('HR: %0.2f Mh/s' % (total_khashrate/1000))
 
 def stratum_monitor():
+    '''
     if (config.protocol == 'stratum+tcp:'):
         print '..check stratum proxy..'
         retry = 0
@@ -951,6 +886,44 @@ def stratum_monitor():
             stratum_proxy.stop()
             time.sleep(3)
             stratum_proxy.start(stratum_host, stratum_port, config.port, config.username, config.password)
+    '''
+    test_payload = { 'version':'1.1', 'method':'getwork', 'params':[], 'id':'mtr' }
+    test_data = json.dumps(test_payload)
+    if (config.protocol == 'stratum+tcp:'):
+        print '...check stratum proxy...'
+        retry = 0
+        while (retry < 10):
+            try:
+                r = requests.post('http://localhost:8332', \
+                                    auth=HTTPBasicAuth(config.username, config.password), \
+                                    data=test_data, \
+                                    timeout=30)
+                resp = r.json()
+                if (resp['error'] is not None):
+                    print '-- (stratum_monitor) RPC error!'
+                    retry += 1
+                else:
+                    break
+            except requests.ConnectionError:
+                print '-- (stratum_monitor) HTTP connection error!'
+                retry += 1
+            except requests.Timeout:
+                print '-- (stratum_monitor) HTTP connection timeout!'
+                retry += 1
+            except Exception as e:
+                print '-- (stratum_monitor) RPC general error!'
+                retry += 1
+
+        if (retry >= 10):
+            (stratum_host, stratum_port) = stratum_proxy.get_params()
+            print 'Restarting stratum proxy...'
+            stratum_proxy.stop()
+            time.sleep(3)
+            stratum_proxy.start(stratum_host, stratum_port, config.port, config.username, config.password)
+         
+def enable_miners():
+    miner_ctrl.set()
+    stratum_mtr.start(STRATUM_CHK_INTERVAL)
 
 if __name__ == '__main__':
 
@@ -960,7 +933,7 @@ if __name__ == '__main__':
 
     stratum_proxy = StratumProxy()
 
-    factory = WebSocketServerFactory('ws://localhost:9000', debug=False)
+    factory = WebSocketServerFactory('ws://127.0.0.1:9000', debug=True)
     factory.protocol = WebUIProtocol
     reactor.listenTCP(9000, factory)
 
@@ -1005,9 +978,7 @@ if __name__ == '__main__':
     for b in sorted(brd):
         brd[b] = AsicBoard(com[b], rst[b], alche_protocol[b])
         brd[b].reset()
-        #brd[b].flush(2000)
         brd[b].set_pll()
-        #brd[b].calc_asic_resources()
 
     # Read default ASIC resources
     asic_state = AsicConfig('asic.ini')
@@ -1048,7 +1019,6 @@ if __name__ == '__main__':
     for b in sorted(brd):
         brd[b].set_comport_async_mode()
         brd[b].reset()
-        #brd[b].flush(2000)
         brd[b].set_pll()
 
     # Config work space
@@ -1063,19 +1033,28 @@ if __name__ == '__main__':
             active_brd.append(b)
             active_brd_num += 1
 
-    #coin_rpc = CoinRPC(config.host, int(config.port), config.username, config.password)
 
-    # Close all serial ports
-    #for b in com:
-    #    com[b].close()
+    if (config.protocol == 'stratum+tcp:'):
+        stratum_host = config.host
+        stratum_port = config.port
+        config.host = 'localhost'
+        config.port = '8332'
 
-
-
+    if (config.immediately_run == 'yes'):
+        print 'immediately_run...'
+        if (config.protocol == 'stratum+tcp:'):
+            # startup stratum mining proxy
+            print '>startup stratum proxy...'
+            stratum_proxy.start(stratum_host, stratum_port, config.port, config.username, config.password)
+        # startup minter threads after 5 sec...
+        reactor.callLater(8, enable_miners)
 
     sm = Submitter()
     sm.start()
 
     print active_brd
+
+
 
     thr_list = []
     for thr_id in sorted(active_brd):
@@ -1083,37 +1062,24 @@ if __name__ == '__main__':
         t.start()
         thr_list.append(t)
 
-    time.sleep(1)
+    #time.sleep(1)
     stat = Stat()
     stat.start()
-
-    webdisp = LoopingCall(web_display)
-    webdisp.start(3)
-    lcmdisp = LoopingCall(lcm_display)
-    lcmdisp.start(5)
-
-    print 'Thread created:'
-    print thr_list
-
+    
     print time.asctime() + ' Miner Starts ..'
     stat.reset_stt_time()
 
-    if (config.immediately_run == 'yes'):
-        print 'immediately_run...'
-        if (config.protocol == 'stratum+tcp:'):
-                stratum_host = config.host
-                stratum_port = config.port
-                config.host = 'localhost'
-                config.port = '8332'
-                # startup stratum mining proxy
-                print '>startup stratum proxy...'
-                stratum_proxy.start(stratum_host, stratum_port, config.port, config.username, config.password)
-                time.sleep(5)
-        # startup minter threads...
-        miner_ctrl.set()
+    webdisp = LoopingCall(web_display)
+    webdisp.start(WEB_REFRESH_TIME)
+    lcmdisp = LoopingCall(lcm_display)
+    lcmdisp.start(LCM_REFRESH_TIME)
+    refkh = LoopingCall(refresh_khrate)
+    refkh.start(REFRESH_KHRATE_TIME)
+
+    #print 'Thread created:'
+    #print thr_list
 
     stratum_mtr = LoopingCall(stratum_monitor)
-    stratum_mtr.start(30)
 
     reactor.run()
 

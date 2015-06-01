@@ -28,12 +28,10 @@ class CleanJobProtocol(WebSocketClientProtocol):
 
    def onClose(self, wasClean, code, reason):
       log.warn("Clean Job channel closed.")
-      ws_svr.remove(self)
-
-   def send_clean_job_msg(self):
-      rpc_tx = {"method":"clean_job","params":[],"id":"cj"}
-      self.sendMessage(json.dumps(rpc_tx))
-
+      try:
+        ws_svr.remove(self)
+      except ValueError:
+        pass
 
 class ClientMiningService(GenericEventHandler):
     job_registry = None # Reference to JobRegistry instance
@@ -46,7 +44,7 @@ class ClientMiningService(GenericEventHandler):
                 cls.timeout.cancel()
             cls.timeout = None
             
-        cls.timeout = reactor.callLater(2*60, cls.on_timeout)
+        cls.timeout = reactor.callLater(5*60, cls.on_timeout)
 
     @classmethod
     def on_timeout(cls):
@@ -55,13 +53,14 @@ class ClientMiningService(GenericEventHandler):
             It will also drop all Stratum connections to sub-miners
             to indicate connection issues.
         '''
+        log.warn("TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT")
         log.error("Connection to upstream pool timed out")
         cls.reset_timeout()
-        cls.job_registry.f.reconnect()
+        #cls.job_registry.f.reconnect()
                 
     def handle_event(self, method, params, connection_ref):
         '''Handle RPC calls and notifications from the pool'''
-
+        log.warn("@@ %s @@" % method)
         # Yay, we received something from the pool,
         # let's restart the timeout.
         self.reset_timeout()
@@ -76,6 +75,8 @@ class ClientMiningService(GenericEventHandler):
                 log.warn("--Clean Jobs!--")
                 rpc_tx = {"method":"clean_job","params":[],"id":"cj"}
                 for c in ws_svr:
+                    print 'ws_svr'
+                    print c
                     c.sendMessage(json.dumps(rpc_tx))
             '''
             log.debug("Received new job #%s" % job_id)

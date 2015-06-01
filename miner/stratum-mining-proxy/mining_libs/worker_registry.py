@@ -9,6 +9,7 @@ class WorkerRegistry(object):
         self.clear_authorizations()
         
     def clear_authorizations(self):
+        log.warn("@@ clear_auth @@")
         self.authorized = []
         self.unauthorized = []
         self.last_failure = 0
@@ -26,6 +27,7 @@ class WorkerRegistry(object):
                         
     def authorize(self, worker_name, password):
         if worker_name in self.authorized:
+            #log.warn("@@ worker in self.authorized @@")
             return True
             
         if worker_name in self.unauthorized and time.time() - self.last_failure < 60:
@@ -34,6 +36,7 @@ class WorkerRegistry(object):
                     (worker_name, password))
             return False
         
+        log.warn("@@ do f.rpc(mining.authorize) @@")
         d = self.f.rpc('mining.authorize', [worker_name, password])
         d.addCallback(self._on_authorized, worker_name)
         d.addErrback(self._on_failure, worker_name)

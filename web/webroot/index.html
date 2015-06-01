@@ -48,7 +48,7 @@
 
 <script type="text/javascript">
 
-	web_version = "1.0.9";
+	web_version = "1.1.0";
 	ws = ws_init(ws_on_open, ws_on_close, ws_on_error, ws_on_msg);
 	
 	if (ws == null)
@@ -110,7 +110,7 @@ function ws_on_msg(evt)
 		case "s1":
 			a = new Date(rx.result["since"]*1000);
 			var year = a.getFullYear();
-			var mth = a.getMonth();
+			var mth = a.getMonth()+1;
 			var date = a.getDate();
 			var hr = a.getHours();
 			var min = a.getMinutes();
