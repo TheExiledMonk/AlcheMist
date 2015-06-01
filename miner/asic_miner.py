@@ -25,7 +25,7 @@ import socket
 import requests
 from requests.auth import HTTPBasicAuth
 
-VERSION = '1.2.1alpha'
+VERSION = '1.2.3beta'
 
 #------- hw.py --------
 #from serial import Serial
@@ -428,7 +428,7 @@ class Miner(Thread):
             self.targetstr = targetstr
             self.diff = 0x0000ffff00000000 / long(targetstr[48:64].decode('hex')[::-1].encode('hex'), 16)
             #self.work_timeout = self.diff * 65536 / 1000000 / 32
-            self.work_timeout = self.diff * 3.54 / brd[self.bid].good_cores
+            self.work_timeout = self.diff * 3.44 / brd[self.bid].good_cores
             if (self.work_timeout < 8):
                 self.work_timeout = 8
         t = '0' * 48 + targetstr[48:64]
