@@ -25,7 +25,7 @@ import socket
 import requests
 from requests.auth import HTTPBasicAuth
 
-VERSION = '1.1.4'
+VERSION = '1.1.6'
 
 #------- hw.py --------
 #from serial import Serial
@@ -37,6 +37,7 @@ MAX_BOARDS = 8
 MAX_CHIPS = 32
 MAX_CLUSTERS = 6
 MAX_CORES = 9
+DEBUG = 0
 
 g_tail = '00000000000000000000000000000000a78e0100000001000000f615f7ce3b4fc6b8f61e8f89aedb1d0852507650533a9e3b10b9bbcc30639f279fcaa86746e1ef52d3edb3c4ad8259920d509bd073605c9bf1d59983752a6b06b817bb4ea78e011d012d59d4'
 
@@ -285,11 +286,11 @@ def lcm_disp(msg):
 
 class CoinRPC(object):
     def __init__(self, host, port, username, password):
-        self.host = host
-        self.port = port
-        self.username = username
-        self.password = password
-        self.url = 'http://' + self.host + ':' + self.port
+		self.host = host
+		self.port = port
+		self.username = username
+		self.password = password
+		self.url = 'http://' + self.host + ':' + self.port
 
     def reconnect(self, host, port, username, password):
         self.host = host
@@ -300,9 +301,18 @@ class CoinRPC(object):
 
     def getwork(self, data=None):
         payload = { 'version':'1.1', 'method':'getwork', 'params':[], 'id':'1' }
-
+        global DEBUG        	
         payload['params'] = ([] if (data is None) else data)
-
+        if (DEBUG >= 5000):
+			#(stratum_host, stratum_port) = stratum_proxy.get_params()
+			#print 'Restarting stratum proxy... error getwork', DEBUG
+			#stratum_proxy.stop()
+			#time.sleep(3)
+			DEBUG = 0
+			reboot()
+			#stratum_proxy.start(stratum_host, stratum_port, config.port, config.username, config.password)
+		
+		
         try:
             r = requests.post(self.url, \
                                 auth=HTTPBasicAuth(self.username, self.password), \
@@ -310,24 +320,27 @@ class CoinRPC(object):
                                 timeout=30)
             resp = r.json()
             if (resp['error'] is not None):
-                print '-- RPC error!'
+                print '-- RPC error!' , DEBUG
                 print r.text
                 return None
             else:
                 return resp['result']
 
         except requests.ConnectionError:
-            print '-- HTTP connection error!'
-            return None
+			DEBUG += 1
+			print '-- HTTP connection error!', DEBUG
+			return None
 
         except requests.Timeout:
-            print '-- HTTP connection timeout!'
-            return None
+			DEBUG += 1
+			print '-- HTTP connection timeout!', DEBUG
+			return None
 
         except Exception as e:
-            print '-- RPC general error!'
-            print e
-            return None
+			DEBUG += 1
+			print '-- RPC general error!', DEBUG
+			print e
+			return None
 
 class Submitter(Thread):
     def __init__(self):
@@ -536,20 +549,16 @@ class StratumProxy(object):
         self.stratum_port = stratum_port
 
         if not self.isRunning:
-            if ('ghash.io' in stratum_host):
-                self.proxy = subprocess.Popen(['/usr/bin/python', 'stratum-mining-proxy/mining_proxy.py', \
+            self.proxy = subprocess.Popen(['/usr/bin/python', 'stratum-mining-proxy/mining_proxy.py', \
                                                 '-o', stratum_host, '-p', stratum_port, '-gp', getwork_port , \
                                                 '-cu', username, '-cp', password, '-pa', 'scrypt', \
-                                                '-nm', '-q'], stdout=subprocess.PIPE, shell=False)
-            else:
-                self.proxy = subprocess.Popen(['/usr/bin/python', 'stratum-mining-proxy/mining_proxy.py', \
-                                                '-o', stratum_host, '-p', stratum_port, '-gp', getwork_port , \
-                                                '-cu', username, '-cp', password, '-pa', 'scrypt', \
-                                                '-nm', '-cd', '-q'], stdout=subprocess.PIPE, shell=False)
+                                                '-q'], stdout=subprocess.PIPE, shell=False)
             self.isRunning = True
 
     def stop(self):
+        print 'Stopping proxy... 1'
         if self.isRunning:
+            print 'Stopping proxy... 2'
             self.proxy.kill()
             os.wait()
             self.isRunning = False
@@ -892,6 +901,7 @@ def stratum_monitor():
     if (config.protocol == 'stratum+tcp:'):
         print '...check stratum proxy...'
         retry = 0
+        global DEBUG
         while (retry < 10):
             try:
                 r = requests.post('http://localhost:8332', \
@@ -900,26 +910,27 @@ def stratum_monitor():
                                     timeout=30)
                 resp = r.json()
                 if (resp['error'] is not None):
-                    print '-- (stratum_monitor) RPC error!'
+                    print '-- (stratum_monitor) RPC error!', retry
                     retry += 1
                 else:
                     break
             except requests.ConnectionError:
-                print '-- (stratum_monitor) HTTP connection error!'
+                print '-- (stratum_monitor) HTTP connection error!', retry
                 retry += 1
             except requests.Timeout:
-                print '-- (stratum_monitor) HTTP connection timeout!'
+                print '-- (stratum_monitor) HTTP connection timeout!', retry
                 retry += 1
             except Exception as e:
-                print '-- (stratum_monitor) RPC general error!'
+                print '-- (stratum_monitor) RPC general error!', retry
                 retry += 1
 
         if (retry >= 10):
-            (stratum_host, stratum_port) = stratum_proxy.get_params()
-            print 'Restarting stratum proxy...'
-            stratum_proxy.stop()
-            time.sleep(3)
-            stratum_proxy.start(stratum_host, stratum_port, config.port, config.username, config.password)
+			(stratum_host, stratum_port) = stratum_proxy.get_params()
+			print 'Restarting stratum proxy...'
+			stratum_proxy.stop()
+			time.sleep(3)
+			DEBUG = 0
+			stratum_proxy.start(stratum_host, stratum_port, config.port, config.username, config.password)
          
 def enable_miners():
     miner_ctrl.set()
