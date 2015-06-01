@@ -1,0 +1,9 @@
+#! /bin/sh
+
+GPIO=$1
+
+echo 0 > /sys/class/gpio/$GPIO/value
+sleep 0.1
+echo 1 > /sys/class/gpio/$GPIO/value
+
+exit 0

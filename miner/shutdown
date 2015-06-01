@@ -1,0 +1,11 @@
+#! /bin/sh
+
+pkill python
+sh reset_board gpio110
+sh reset_board gpio111
+sh reset_board gpio112
+sh reset_board gpio113
+sh reset_board gpio114
+sh reset_board gpio115
+sh reset_board gpio116
+sh reset_board gpio117

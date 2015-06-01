@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+  <head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="chrome=1,IE=edge" />
+	<title>alcheminer_webs</title>
+	<style>
+		html {
+			height:100%;
+		}
+		body {
+			background-color: #FFFFFF;
+			margin:0;
+			height:100%;
+		}
+	</style>
+
+	<!-- copy these lines to your document head: -->
+
+	<meta name="viewport" content="user-scalable=yes, width=800" />
+
+
+	<!-- end copy -->
+	<script type="text/javascript" src="util.js"></script>
+
+  </head>
+  <body>
+	<div style ="margin:auto;width:800px;height:640px">
+
+
+	
+	<!-- copy these lines to your document: -->
+
+	<div id="diagnosticweb_hype_container" style="position:relative;overflow:hidden;width:600px;height:700px;">
+		<script type="text/javascript" charset="utf-8" src="diagnostic_web.hyperesources/diagnosticweb_hype_generated_script.js?43887"></script>
+	</div>
+	<!-- end copy -->
+
+	</div>
+
+<script type="text/javascript">
+
+	var brd_00, brd_01, brd_02, brd_03, brd_04, brd_05, brd_06, brd_07;
+
+
+	ws = ws_init(ws_on_open, ws_on_close, ws_on_error, ws_on_msg);
+	
+	if (ws == null)
+		alert("WebSocket NOT enabled!");
+
+function diag_init()
+{
+	//document.getElementById("txt_status").innerHTML = "Ready to Go!";
+}
+
+function diag_start()
+{
+	var rpc_tx = {"method":"diag_report", "params":[], "id":"diag"};
+	ws_send(JSON.stringify(rpc_tx));
+}
+
+function ws_on_open(evt)
+{
+	setTimeout(diag_start(), 1000);
+}
+
+function ws_on_close(evt)
+{                                                 
+	document.getElementById("txt_status").innerHTML = "Disconnected!";
+}
+
+function ws_on_error(evt)
+{
+
+}
+
+function show_cores(brd, brdid)
+{
+	var i, j;
+	var total_good_core = 0, good_core_in_chip = 0;
+
+	for (i in brd)
+	{
+		good_core_in_chip = 0
+		for (j in brd[i])
+		{
+			for (k=0; k<9; k++)
+			{
+				good_core_in_chip += ((brd[i][j] >> k) & 0x0001);
+			}
+		}
+		document.getElementById("g-"+i).innerHTML = good_core_in_chip;
+		document.getElementById("b-"+i).innerHTML = 54 - good_core_in_chip;
+		total_good_core += good_core_in_chip;
+	}
+	document.getElementById("brdg-"+brdid).innerHTML = total_good_core;
+	document.getElementById("brdb-"+brdid).innerHTML = 32*6*9 - total_good_core;
+}
+
+function ws_on_msg(evt)
+{
+	var rx;
+
+	rx = JSON.parse(evt.data);
+
+	switch (rx.id)
+	{
+		case "d0":
+			document.getElementById("txt_status").innerHTML = rx.result;	
+			break;
+		case "d_00":
+			document.getElementById("txt_brdnum").innerHTML = "00";
+			brd_00 = rx.result;
+			show_cores(rx.result, "00");
+			break;
+		case "d_01":
+			document.getElementById("txt_brdnum").innerHTML = "01";
+			brd_01 = rx.result;
+			show_cores(rx.result, "01");
+			break;
+		case "d_02":
+			document.getElementById("txt_brdnum").innerHTML = "02";
+			brd_02 = rx.result;
+			show_cores(rx.result, "02");
+			break;
+		case "d_03":
+			document.getElementById("txt_brdnum").innerHTML = "03";
+			brd_03 = rx.result;
+			show_cores(rx.result, "03");
+			break;
+		case "d_04":
+			document.getElementById("txt_brdnum").innerHTML = "04";
+			brd_04 = rx.result;
+			show_cores(rx.result, "04");
+			break;
+		case "d_05":
+			document.getElementById("txt_brdnum").innerHTML = "05";
+			brd_05 = rx.result;
+			show_cores(rx.result, "05");
+			break;
+		case "d_06":
+			document.getElementById("txt_brdnum").innerHTML = "06";
+			brd_06 = rx.result;
+			show_cores(rx.result, "06");
+			break;
+		case "d_07":
+			document.getElementById("txt_brdnum").innerHTML = "07";
+			brd_07 = rx.result;
+			show_cores(rx.result, "07");
+			break;
+
+	}
+
+	return
+
+}
+
+function ws_send(msg)
+{
+	ws.send(msg);
+}
+
+function show_brd_00()
+{
+	document.getElementById("txt_brdnum").innerHTML = "00";
+	show_cores(brd_00, "00");
+}
+function show_brd_01()
+{
+	document.getElementById("txt_brdnum").innerHTML = "01";
+	show_cores(brd_01, "01");
+}
+function show_brd_02()
+{
+	document.getElementById("txt_brdnum").innerHTML = "02";
+	show_cores(brd_02, "02");
+}
+function show_brd_03()
+{
+	document.getElementById("txt_brdnum").innerHTML = "03";
+	show_cores(brd_03, "03");
+}
+function show_brd_04()
+{
+	document.getElementById("txt_brdnum").innerHTML = "04";
+	show_cores(brd_04, "04");
+}
+function show_brd_05()
+{
+	document.getElementById("txt_brdnum").innerHTML = "05";
+	show_cores(brd_05, "05");
+}
+function show_brd_06()
+{
+	document.getElementById("txt_brdnum").innerHTML = "06";
+	show_cores(brd_06, "06");
+}
+function show_brd_07()
+{
+	document.getElementById("txt_brdnum").innerHTML = "07";
+	show_cores(brd_07, "07");
+}
+
+function delayed_reload()
+{                                                                              
+	window.location = "/";
+	window.location.reload(true);
+}
+
+
+
+</script>
+  </body>
+</html>

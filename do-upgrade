@@ -1,0 +1,17 @@
+#! /bin/sh
+
+if [ -e /home/admin/AlcheMist/miner/access_code ]; then
+    cp /home/admin/AlcheMist/miner/access_code /tmp
+fi
+rm /home/admin/old_AlcheMist
+mv /home/admin/AlcheMist /home/admin/old_AlcheMist
+cp -r /tmp/AlcheMist /home/admin
+
+if [ -e /tmp/access_code ]; then
+    cp /tmp/access_code /home/admin/AlcheMist/miner
+fi
+
+sleep 3
+touch /tmp/Good_luck
+
+/sbin/reboot

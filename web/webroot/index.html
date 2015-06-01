@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+  <head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="chrome=1,IE=edge" />
+	<title>alcheminer_webs</title>
+	<style>
+		html {
+			height:100%;
+		}
+		body {
+			background-color: #FFFFFF;
+			margin:0;
+			height:100%;
+		}
+	</style>
+
+	<!-- copy these lines to your document head: -->
+
+	<meta name="viewport" content="user-scalable=yes, width=800" />
+
+
+	<!-- end copy -->
+	<script type="text/javascript" src="util.js"></script>
+	<script type="text/javascript" src="parseuri.js"></script>
+
+  </head>
+  <body>
+	<div style ="margin:auto;width:800px;height:640px">
+
+
+	
+	<!-- copy these lines to your document: -->
+
+	<div id="alcheminerwebs_hype_container" style="position:relative;overflow:hidden;width:800px;height:640px;">
+		<script type="text/javascript" charset="utf-8" src="alcheminer_webs.hyperesources/alcheminerwebs_hype_generated_script.js?89823"></script>
+	</div>
+
+
+
+	<!-- end copy -->
+
+
+	</div>
+	
+
+
+
+<script type="text/javascript">
+
+	web_version = "1.0.9";
+	ws = ws_init(ws_on_open, ws_on_close, ws_on_error, ws_on_msg);
+	
+	if (ws == null)
+		alert("WebSocket NOT enabled!");
+
+
+function s1_init()
+{
+	document.getElementById("total_khr").innerHTML = "---.--";
+	document.getElementById("brd0_khr").innerHTML = "---.--";
+	document.getElementById("brd1_khr").innerHTML = "---.--";
+	document.getElementById("brd2_khr").innerHTML = "---.--";
+	document.getElementById("brd3_khr").innerHTML = "---.--";
+	document.getElementById("brd4_khr").innerHTML = "---.--";
+	document.getElementById("brd5_khr").innerHTML = "---.--";
+	document.getElementById("brd6_khr").innerHTML = "---.--";
+	document.getElementById("brd7_khr").innerHTML = "---.--";
+	//timed_loop();
+}
+
+function ws_on_open(evt)
+{
+
+}
+
+function ws_on_close(evt)
+{                                                 
+	setTimeout("delayed_reload()", 3000);  
+}
+
+function ws_on_error(evt)
+{
+
+}
+
+function ws_on_msg(evt)
+{
+	var rx;
+	var total_khr, brd0_khr, brd1_khr, brd2_khr, brd3_khr, brd4_khr, brd5_khr, brd6_khr, brd7_khr;
+	var t = new Date();
+	var miner_ver;
+	var a;
+
+	rx = JSON.parse(evt.data);
+
+	switch (rx.id)
+	{
+		case "ver":
+			miner_ver = rx.result;
+			document.getElementById("txt_miner_version").innerHTML = miner_ver;
+			break;
+		case "s0":
+			if (rx.result)
+				HYPE.documents['alcheminer_webs'].showSceneNamed('s1');
+			else
+				alert("Access denied!");
+			break;
+
+		case "s1":
+			a = new Date(rx.result["since"]*1000);
+			var year = a.getFullYear();
+			var mth = a.getMonth();
+			var date = a.getDate();
+			var hr = a.getHours();
+			var min = a.getMinutes();
+			var sec = a.getSeconds();
+			var since_str = "Since: " + year + "/" + mth + "/" + date + "  " + hr + ":" + min + ":" + sec + ",   accepted / rejected: " + rx.result["accepted"] + " / " + rx.result["rejected"];
+
+			brd0_khr = rx.result["00"]/1000;
+			brd1_khr = rx.result["01"]/1000;
+			brd2_khr = rx.result["02"]/1000;
+			brd3_khr = rx.result["03"]/1000;
+			brd4_khr = rx.result["04"]/1000;
+			brd5_khr = rx.result["05"]/1000;
+			brd6_khr = rx.result["06"]/1000;
+			brd7_khr = rx.result["07"]/1000;
+			total_khr = (brd0_khr + brd1_khr + brd2_khr + brd3_khr + brd4_khr + brd5_khr + brd6_khr + brd7_khr);
+			document.getElementById("total_khr").innerHTML = total_khr.toFixed(2).toString();
+			document.getElementById("brd0_khr").innerHTML = brd0_khr.toFixed(2).toString();
+			document.getElementById("brd1_khr").innerHTML = brd1_khr.toFixed(2).toString();
+			document.getElementById("brd2_khr").innerHTML = brd2_khr.toFixed(2).toString();
+			document.getElementById("brd3_khr").innerHTML = brd3_khr.toFixed(2).toString();
+			document.getElementById("brd4_khr").innerHTML = brd4_khr.toFixed(2).toString();
+			document.getElementById("brd5_khr").innerHTML = brd5_khr.toFixed(2).toString();
+			document.getElementById("brd6_khr").innerHTML = brd6_khr.toFixed(2).toString();
+			document.getElementById("brd7_khr").innerHTML = brd7_khr.toFixed(2).toString();
+			document.getElementById("s1_txt_timestamp").innerHTML = t.getHours()+":"+t.getMinutes()+":"+t.getSeconds();
+			document.getElementById("s1_txt_since").innerHTML = since_str;
+			break;
+
+		case "s2":
+			if (rx.result.length == 1)
+			{
+				alert("Config save OK!")
+			}
+			else
+			{
+				document.getElementById("s2_txt_poolurl").value = rx.result[0] + "//" + rx.result[1] + ":" + rx.result[2];
+				document.getElementById("s2_txt_username").value = rx.result[3];
+				document.getElementById("s2_txt_password").value = rx.result[4];
+			}
+			break;
+		case "s3":
+			if (rx.result.length == 1)
+			{
+				alert("Network setup OK!")
+			}
+			else
+			{
+				document.getElementById("s3_cb_dhcpc").checked = (rx.result[0] == "dhcpc") ? true : false;
+				document.getElementById("s3_txt_ipaddr").value = rx.result[1];
+				document.getElementById("s3_txt_netmask").value = rx.result[2];
+				document.getElementById("s3_txt_gateway").value = rx.result[3];
+				document.getElementById("s3_txt_dns").value = rx.result[4];
+			}
+			break;
+		case "s4":
+			if (rx.result[0] == "ok")
+				alert("New password has been set!");
+			else
+				alert("Wrong old password!");
+			break;
+		case "s5":
+			break;
+	}
+
+	return
+
+
+}
+
+function ws_send(msg)
+{
+	//document.getElementById("rpc_send").value += (msg + "\r\n");
+	ws.send(msg);
+}
+
+function timed_loop()
+{
+	ws_send('hashrate');
+	timer = setTimeout("timed_loop()", 10000);
+}
+
+function delayed_reload()
+{                                                                              
+	window.location = "/";
+	window.location.reload(true);
+}
+
+function s0_init()
+{
+
+}
+
+function s0_login(pwd)
+{
+	var rpc_tx = {"method":"login","params":null,"id":"s0"};
+	
+	rpc_tx.params = [pwd];
+	ws_send(JSON.stringify(rpc_tx));
+}
+
+function s1_init()
+{
+	var rpc_tx = {"method":"version","params":[],"id":"ver"};
+	ws_send(JSON.stringify(rpc_tx));
+	document.getElementById("txt_web_version").innerHTML = web_version;
+}
+
+function s1_ctrl(onoff)
+{
+	var rpc_tx = {"method":"control", "params":[(onoff == 1) ? 'go' : 'stop'], "id":"s1"};
+
+	ws_send(JSON.stringify(rpc_tx));
+}
+
+function s2_init()
+{
+	var rpc_tx = {"method":"pool_config", "params":[], "id":"s2"};
+	ws_send(JSON.stringify(rpc_tx));
+}
+
+function s2_go_mining(poolurl, username, password)
+{
+	var rpc_tx = {"method":"pool_config", "params":null, "id":"s2"};
+	var protocol = parseUri(poolurl).protocol + ":";
+	var hostname = parseUri(poolurl).host;
+	var port = parseUri(poolurl).port;
+
+	if (protocol == "http:" || protocol == "stratum+tcp:")
+	{
+
+		rpc_tx.params = [protocol, hostname, port, username, password];
+		ws_send(JSON.stringify(rpc_tx));
+	}
+	else
+	{
+		alert("Poolurl protocol error!");
+	}
+}
+
+function s3_init()
+{
+	var rpc_tx = {"method":"host_config", "params":[], "id":"s3"};
+	ws_send(JSON.stringify(rpc_tx));
+}
+
+function s3_set_network(dhcpc, ipaddr, netmask, gateway, dns)
+{
+	var rpc_tx = {"method":"host_config", "params":null, "id":"s3"};
+	var binding = (dhcpc) ? "dhcpc" : "fixedip";
+	var ipRE = new RegExp( '^\\d+\\.\\d+\\.\\d+\\.\\d+$' );
+ 
+    if (!dhcpc)
+    {
+    	if (!ipRE.test(ipaddr))
+    	{
+    		alert("Invalid IP Address!");
+    		return;
+    	}
+    	if (!ipRE.test(netmask))
+    	{
+    		alert("Invalid Netmask!");
+    		return;
+    	}
+    	if (!ipRE.test(gateway))
+    	{
+    		alert("Invalud Gateway IP!");
+    		return;
+    	}
+    	if (!ipRE.test(dns))
+    	{
+    		alert("Invalud DNS IP!");
+    		return;
+    	}
+    }
+	rpc_tx.params = [binding, ipaddr, netmask, gateway, dns];
+	ws_send(JSON.stringify(rpc_tx));
+}
+
+function s4_init()
+{
+
+}
+
+function s4_set_newpassword(oldpassword, newpassword, newpassword2)
+{
+	var rpc_tx = {"method":"access_ctrl", "params":null, "id":"s4"};
+
+	if (newpassword.length == 0)
+	{
+		alert("Empty new password!");
+		return;
+	}
+	if (newpassword != newpassword2)
+	{
+		alert("New password not match!");
+		return;
+	}
+	rpc_tx.params = [oldpassword, newpassword];
+	ws_send(JSON.stringify(rpc_tx));
+}
+
+function s5_init()
+{
+
+}
+
+
+</script>
+  </body>
+</html>

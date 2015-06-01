@@ -1,0 +1,3 @@
+#! /bin/sh
+
+python asic_miner.py
