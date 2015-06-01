@@ -4,36 +4,11 @@ from stratum.event_handler import GenericEventHandler
 from jobs import Job
 import utils
 import version as _version
+
 import stratum_listener
-from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketClientFactory
-import json
 
 import stratum.logger
 log = stratum.logger.get_logger('proxy')
-
-
-ws_svr = []
-
-class CleanJobProtocol(WebSocketClientProtocol):
-
-   def onConnect(self, response):
-      log.warn("Clean Job channel connected.")
-
-   def onOpen(self):
-      log.warn("Clean Job channel connection open.")
-      ws_svr.append(self)
-
-   def onMessage(self, payload, isBinary):
-      log.warn("%s" % payload)
-
-   def onClose(self, wasClean, code, reason):
-      log.warn("Clean Job channel closed.")
-      ws_svr.remove(self)
-
-   def send_clean_job_msg(self):
-      rpc_tx = {"method":"clean_job","params":[],"id":"cj"}
-      self.sendMessage(json.dumps(rpc_tx))
-
 
 class ClientMiningService(GenericEventHandler):
     job_registry = None # Reference to JobRegistry instance
@@ -70,13 +45,9 @@ class ClientMiningService(GenericEventHandler):
             '''Proxy just received information about new mining job'''
             
             (job_id, prevhash, coinb1, coinb2, merkle_branch, version, nbits, ntime, clean_jobs) = params[:9]
+            log.warn("-------clean jobs: %s-------" % clean_jobs)
             #print len(str(params)), len(merkle_branch)
             
-            if (clean_jobs):
-                log.warn("--Clean Jobs!--")
-                rpc_tx = {"method":"clean_job","params":[],"id":"cj"}
-                for c in ws_svr:
-                    c.sendMessage(json.dumps(rpc_tx))
             '''
             log.debug("Received new job #%s" % job_id)
             log.debug("prevhash = %s" % prevhash)

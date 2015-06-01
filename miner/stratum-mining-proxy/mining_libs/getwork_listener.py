@@ -92,6 +92,7 @@ class Root(Resource):
             else:
                 
                 # submit
+                #log.warn("^^ %s" % data['params'][0])
                 d = defer.maybeDeferred(self.job_registry.submit, data['params'][0], worker_name)
 
                 start_time = time.time()

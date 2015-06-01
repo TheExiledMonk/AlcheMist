@@ -141,10 +141,10 @@ class JobRegistry(object):
         if clean_jobs:
             # Pool asked us to stop submitting shares from previous jobs
             self.jobs = []
-            
+
         self.jobs.append(template)
         self.last_job = template
-                
+
         if clean_jobs:
             # Force miners to reload jobs
             on_block = self.on_block
@@ -153,7 +153,7 @@ class JobRegistry(object):
     
             # blocknotify-compatible call
             self.execute_cmd(template.prevhash)
-          
+
     def register_merkle(self, job, merkle_hash, extranonce2):
         # merkle_to_job is weak-ref, so it is cleaned up automatically
         # when job is dropped
@@ -163,8 +163,11 @@ class JobRegistry(object):
     def get_job_from_header(self, header):
         '''Lookup for job and extranonce2 used for given blockheader (in hex)'''
         merkle_hash = header[72:136].lower()
+        #log.warn("(merkle_hash: %s)" % merkle_hash)
         job = self.merkle_to_job[merkle_hash]
+        #log.warn("<job: %s>" % job)
         extranonce2 = job.merkle_to_extranonce2[merkle_hash]
+        #log.warn("{extranonce2: %s}" % extranonce2)
         return (job, extranonce2)
         
     def getwork(self, no_midstate=True):
@@ -215,9 +218,11 @@ class JobRegistry(object):
         return result            
         
     def submit(self, header, worker_name):            
+        #log.warn("yes. JobRegistry.submit %s" % header)
         # Drop unused padding
         header = header[:160]
 
+        '''
         # 1. Check if blockheader meets requested difficulty
         header_bin = binascii.unhexlify(header[:160])
         rev = ''.join([ header_bin[i*4:i*4+4][::-1] for i in range(0, 20) ])
@@ -228,14 +233,15 @@ class JobRegistry(object):
         log.info("Submitting %s" % utils.format_hash(binascii.hexlify(block_hash)))
         
         if utils.uint256_from_str(hash_bin) > self.target:
-            log.debug("Share is below expected target")
-            return True
+            log.warn("Share is below expected target")
+        #    return True
+        '''
         
         # 2. Lookup for job and extranonce used for creating given block header
         try:
             (job, extranonce2) = self.get_job_from_header(header)
         except KeyError:
-            log.info("Job not found")
+            log.warn("Job not found")
             return False
 
         # 3. Format extranonce2 to hex string
@@ -246,6 +252,7 @@ class JobRegistry(object):
         noncepos = 19*8 # 19th integer in datastring       
         ntime = header[ntimepos:ntimepos+8] 
         nonce = header[noncepos:noncepos+8]
-            
+        
+        #log.warn("----header: %s" % header)    
         # 5. Submit share to the pool
         return self.f.rpc('mining.submit', [worker_name, job.job_id, extranonce2_hex, ntime, nonce])

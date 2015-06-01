@@ -24,7 +24,7 @@ from twisted.protocols.basic import LineReceiver
 import binascii
 import socket
 
-VERSION = '1.0.10'
+VERSION = '1.1.0'
 
 #------- hw.py --------
 from serial import Serial
@@ -446,8 +446,12 @@ class Miner(Thread):
         try:
             data = ans_queue[self.bid].get(timeout=self.work_timeout)
             dt = time.time() - self.time_start
-            print '==(%s)== %s <%0.2f>' % (self.bid, data.encode('hex'), dt)
-            com_resp = data
+            if (data == 'ffffffffffffffffff'):
+                print '==(%s)== clean job! <%0.2f>' % (self.bid, dt)
+                com_resp = ''
+            else:
+                print '==(%s)== %s <%0.2f>' % (self.bid, data.encode('hex'), dt)
+                com_resp = data
         except Queue.Empty:
             com_resp = ''
 
@@ -647,7 +651,8 @@ class WebUIProtocol(WebSocketServerProtocol):
                                'host_config': self.web_host_config, \
                                'access_ctrl': self.web_access_ctrl, \
                                'upgrade': self.web_upgrade, \
-                               'diag_report': self.web_diag_report
+                               'diag_report': self.web_diag_report, \
+                               'clean_job': self.clean_job
                               }
         self.stratum_proxy = None
 
@@ -655,11 +660,14 @@ class WebUIProtocol(WebSocketServerProtocol):
         print 'Connecting...'
 
     def onOpen(self):
-        ws_client.append(self)
+        #ws_client.append(self)
         print 'Opening...'
 
     def onClose(self, wasClean, code, reason):
-        ws_client.remove(self)
+        try:
+            ws_client.remove(self)
+        except ValueError:
+            pass
         print 'Close...'
 
     def onMessage(self, data, isBinary):
@@ -680,6 +688,7 @@ class WebUIProtocol(WebSocketServerProtocol):
             return False
 
     def web_version(self, req):
+        ws_client.append(self)
         rsp = {'result':False, 'error':None, 'id':None}
         rsp['id'] = req['id']
         rsp['result'] = VERSION
@@ -736,6 +745,7 @@ class WebUIProtocol(WebSocketServerProtocol):
         return
 
     def web_hashrate(self, req):
+        print 'report_hashrate...'
         rsp = {'result':False, 'error':None, 'id':None}
         rsp['result'] = json.dumps(global_khrate)
         rsp['id'] = req['id']
@@ -902,6 +912,12 @@ class WebUIProtocol(WebSocketServerProtocol):
                 self.diag_report_str('Scan complete!')   
         DiagThread(self).start()
 
+    def clean_job(self, req):
+        print 'clean job!'
+        # put 9-byte 'FF' to inform all board to clean jobs immediately
+        for bid in ans_queue:
+            ans_queue[bid].put('ffffffffffffffffff')
+        return
 
 lcm_disp('Hello, miner...')
 

@@ -63,7 +63,6 @@ from twisted.internet import reactor, defer
 from stratum.socket_transport import SocketTransportFactory, SocketTransportClientFactory
 from stratum.services import ServiceEventHandler
 from twisted.web.server import Site
-from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketClientFactory
 
 from mining_libs import stratum_listener
 from mining_libs import getwork_listener
@@ -139,8 +138,6 @@ def test_launcher(result, job_registry):
     reactor.callLater(1, run_test)
     return result
 
-def send_clean_job_message(cj):
-    cj.send_clean_job_msg()
 
 @defer.inlineCallbacks
 def main(args):
@@ -238,13 +235,6 @@ def main(args):
         log.info("LISTENING FOR MINERS ON http://%s:%d (getwork) and stratum+tcp://%s:%d (stratum)" % \
                  (args.getwork_host, args.getwork_port, args.stratum_host, args.stratum_port))
     log.info("-----------------------------------------------------------------------")
-
-    # Setup clean_job notifier
-    clean_job_factory = WebSocketClientFactory('ws://localhost:9000', debug = False)
-    clean_job_factory.protocol = client_service.CleanJobProtocol
-    reactor.connectTCP('127.0.0.1', 9000, clean_job_factory)
-    #cj = CleanJobProtocol()
-    #client_service.ClientMiningService.clean_job_protocol = cj
 
 if __name__ == '__main__':
     main(args)
